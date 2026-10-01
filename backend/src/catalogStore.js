@@ -104,7 +104,33 @@ async function getCatalog() {
   };
 }
 
-async function addClient(name) {
+/**
+ * Resolve optional id: use provided UUID or auto-generate.
+ * @param {unknown} rawId
+ * @param {Array<{ id?: string }>} existing
+ * @param {string} entityLabel
+ * @returns {string}
+ */
+function resolveEntityId(rawId, existing, entityLabel) {
+  const trimmed =
+    typeof rawId === "string" && rawId.trim() ? rawId.trim() : "";
+  if (!trimmed) {
+    return crypto.randomUUID();
+  }
+  if (!UUID_RE.test(trimmed)) {
+    const e = new Error(`${entityLabel} id must be a valid UUID`);
+    e.statusCode = 400;
+    throw e;
+  }
+  if (existing.some((item) => item && item.id === trimmed)) {
+    const e = new Error(`${entityLabel} id already exists`);
+    e.statusCode = 409;
+    throw e;
+  }
+  return trimmed;
+}
+
+async function addClient(name, id) {
   const trimmed = typeof name === "string" ? name.trim() : "";
   if (!trimmed) {
     const e = new Error("Client name is required");
@@ -114,7 +140,7 @@ async function addClient(name) {
   return serializeWrite(async () => {
     const doc = await readDocument();
     const client = {
-      id: crypto.randomUUID(),
+      id: resolveEntityId(id, doc.clients, "Client"),
       name: trimmed,
       isDeleted: false,
     };
@@ -124,7 +150,7 @@ async function addClient(name) {
   });
 }
 
-async function addProject(name, clientId) {
+async function addProject(name, clientId, id) {
   const trimmed = typeof name === "string" ? name.trim() : "";
   if (!trimmed) {
     const e = new Error("Project name is required");
@@ -153,7 +179,7 @@ async function addProject(name, clientId) {
       }
     }
     const project = {
-      id: crypto.randomUUID(),
+      id: resolveEntityId(id, doc.projects, "Project"),
       name: trimmed,
       clientId: linkedClientId,
       isDeleted: false,
@@ -171,6 +197,16 @@ async function softDeleteClient(id) {
     if (!client) {
       const e = new Error("Client not found");
       e.statusCode = 404;
+      throw e;
+    }
+    const linkedProjects = doc.projects.filter(
+      (p) => p && p.clientId === id && p.isDeleted !== true,
+    );
+    if (linkedProjects.length > 0) {
+      const e = new Error(
+        `Cannot remove client while it has ${linkedProjects.length} project(s). Remove the projects first.`,
+      );
+      e.statusCode = 400;
       throw e;
     }
     client.isDeleted = true;

@@ -7,6 +7,7 @@ import CalendarGrid from "../components/calendar/CalendarGrid.jsx";
 import DayEditor from "../components/editor/DayEditor.jsx";
 import TodoPanel from "../components/todos/TodoPanel.jsx";
 import HolidayImportDialog from "../components/holidays/HolidayImportDialog.jsx";
+import CreateCatalogDialog from "../components/catalog/CreateCatalogDialog.jsx";
 import { MONTH_NAMES } from "../constants/months.js";
 import { formatDailyUpdateBullets } from "../utils/dailyUpdate.js";
 import { todayDateString } from "../utils/date.js";
@@ -29,6 +30,7 @@ export default function CalendarPage() {
   const [statusKind, setStatusKind] = useState("");
   const [saving, setSaving] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [catalogCreateOpen, setCatalogCreateOpen] = useState(false);
 
   const showStatus = useCallback((message, kind = "") => {
     setStatus(message || "");
@@ -400,6 +402,13 @@ export default function CalendarPage() {
         <>
           <Button
             size="sm"
+            onClick={() => setCatalogCreateOpen(true)}
+            title="Create or remove clients and projects"
+          >
+            Clients / projects
+          </Button>
+          <Button
+            size="sm"
             onClick={() => setImportOpen(true)}
             title="Fetch India public holidays and choose which to import"
           >
@@ -474,6 +483,20 @@ export default function CalendarPage() {
         year={year}
         onClose={() => setImportOpen(false)}
         onImported={handleHolidaysImported}
+        onStatus={showStatus}
+      />
+      <CreateCatalogDialog
+        open={catalogCreateOpen}
+        clients={activeClients}
+        projects={activeProjects}
+        onClose={() => setCatalogCreateOpen(false)}
+        onChanged={async () => {
+          try {
+            await loadCatalog();
+          } catch (e) {
+            showStatus(e.message, "err");
+          }
+        }}
         onStatus={showStatus}
       />
     </AppShell>

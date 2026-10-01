@@ -15,7 +15,7 @@ router.get("/", async (req, res, next) => {
 router.post("/clients", async (req, res, next) => {
   try {
     const body = req.body && typeof req.body === "object" ? req.body : {};
-    const client = await catalogStore.addClient(body.name);
+    const client = await catalogStore.addClient(body.name, body.id);
     res.status(201).json(client);
   } catch (err) {
     const status = err.statusCode || 500;
@@ -30,7 +30,11 @@ router.post("/clients", async (req, res, next) => {
 router.post("/projects", async (req, res, next) => {
   try {
     const body = req.body && typeof req.body === "object" ? req.body : {};
-    const project = await catalogStore.addProject(body.name, body.clientId);
+    const project = await catalogStore.addProject(
+      body.name,
+      body.clientId,
+      body.id,
+    );
     res.status(201).json(project);
   } catch (err) {
     const status = err.statusCode || 500;

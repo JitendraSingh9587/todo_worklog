@@ -55,4 +55,28 @@ export const todosApi = {
 
 export const catalogApi = {
   get: () => fetchJson("/api/catalog"),
+  createClient: (body) =>
+    fetchJson("/api/catalog/clients", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+    }),
+  createProject: (body) =>
+    fetchJson("/api/catalog/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+    }),
+  deleteClient: (id) =>
+    fetchJson(`/api/catalog/clients/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isDeleted: true }),
+    }),
+  deleteProject: (id) =>
+    fetchJson(`/api/catalog/projects/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isDeleted: true }),
+    }),
 };

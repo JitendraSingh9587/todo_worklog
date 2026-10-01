@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "about": "Clients and projects master data. Soft-delete with isDeleted. Sample projectId from API payload is seeded.",
+  "clients": [
+    {
+      "id": "f9c556ac-2940-4bf1-9315-05799a732109",
+      "name": "ALLCAD",
+      "isDeleted": false
+    }
+  ],
+  "projects": [
+    {
+      "id": "f9c556ac-2940-4bf1-9315-05799a732109",
+      "name": "DIGITAL EYE",
+      "clientId": "f9c556ac-2940-4bf1-9315-05799a732109",
+      "isDeleted": false
+    }
+  ]
+}

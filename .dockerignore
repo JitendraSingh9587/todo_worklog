@@ -1,0 +1,12 @@
+node_modules
+backend/node_modules
+client/node_modules
+client/dist
+npm-debug.log
+.git
+.env
+.env.*
+backend/.env
+backend/.env.*
+!backend/.env.example
+*.md

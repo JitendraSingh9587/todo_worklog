@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "about": "Todo sheet: only dates with todos are stored. Soft-delete with isDeleted true/false — todos are never removed from the sheet.",
+  "days": [
+    {
+      "date": "2026-09-30",
+      "todos": [
+        {
+          "id": "2310f3a9-50f9-4f81-bc44-f6bff43257b2",
+          "text": "test",
+          "done": false,
+          "isDeleted": true
+        }
+      ]
+    }
+  ]
+}

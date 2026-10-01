@@ -1,0 +1,62 @@
+# Persisted calendar JSON: ./backend/data (mounted into the API container).
+#
+# API + built React UI:  docker compose up --build
+# React HMR (optional):  docker compose --profile frontend up
+#
+# restart: unless-stopped — Docker brings containers back after host reboot.
+services:
+  api:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    ports:
+      # Host 3333 → container PORT from backend/.env (currently 3334)
+      - "3333:3334"
+    env_file:
+      - ./backend/.env
+    working_dir: /app/backend
+    volumes:
+      - ./backend/src:/app/backend/src
+      - ./backend/data:/app/backend/data
+      - ./client/dist:/app/client/dist
+      - ./backend/nodemon.json:/app/backend/nodemon.json:ro
+      - ./backend/.env:/app/backend/.env:ro
+
+  client:
+    profiles:
+      - frontend
+    restart: unless-stopped
+    image: node:20-alpine
+    working_dir: /app/client
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 5173"
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_PROXY: http://api:${PORT:-3000}
+    volumes:
+      - ./client:/app/client
+      - client_node_modules:/app/client/node_modules
+    depends_on:
+      - api
+
+  production:
+    profiles:
+      - production
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    ports:
+      # Keep in sync with PORT in backend/.env
+      - "3333:3334"
+    env_file:
+      - ./backend/.env
+    working_dir: /app/backend
+    volumes:
+      - ./backend/data:/app/backend/data
+
+volumes:
+  client_node_modules:

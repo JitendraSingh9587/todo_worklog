@@ -10,7 +10,7 @@
     {
       "id": "256925a1-94f8-47b7-8dd6-bd65dccc9ad4",
       "name": "te",
-      "isDeleted": false
+      "isDeleted": true
     }
   ],
   "projects": [
@@ -24,7 +24,7 @@
       "id": "b906a74a-b277-4075-a79e-f71bdf5239ce",
       "name": "rr",
       "clientId": "f9c556ac-2940-4bf1-9315-05799a732109",
-      "isDeleted": false
+      "isDeleted": true
     }
   ]
 }

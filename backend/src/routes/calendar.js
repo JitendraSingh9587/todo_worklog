@@ -92,20 +92,32 @@ router.get("/holidays/preview", async (req, res, next) => {
  * Import selected holidays into local year calendars.
  * Body:
  * - holidays: [{ date, title, isOptional? }] — required selected list
+ * - removeDates: ["YYYY-MM-DD", ...] — existing public holidays to restore
  * - includeOptional: true — also apply optional/restricted items (default true when holidays provided)
  */
 router.post("/sync-holidays", async (req, res, next) => {
   try {
     const body = req.body && typeof req.body === "object" ? req.body : {};
 
-    if (!Array.isArray(body.holidays) || body.holidays.length === 0) {
+    if (!Array.isArray(body.holidays)) {
       res.status(400).json({
-        error: "Provide a non-empty holidays array to import",
+        error: "Provide a holidays array to import (may be empty when only removing)",
       });
       return;
     }
 
     const holidays = body.holidays;
+    const removeDates = Array.isArray(body.removeDates)
+      ? body.removeDates
+      : [];
+
+    if (holidays.length === 0 && removeDates.length === 0) {
+      res.status(400).json({
+        error: "Provide holidays to import and/or removeDates to restore",
+      });
+      return;
+    }
+
     const includeOptional =
       body.includeOptional === undefined
         ? true
@@ -114,6 +126,7 @@ router.post("/sync-holidays", async (req, res, next) => {
 
     const summary = await calendarStore.syncHolidays(holidays, {
       includeOptional,
+      removeDates,
     });
     res.json({
       ok: true,

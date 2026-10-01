@@ -296,7 +296,11 @@ export default function CalendarPage() {
           ? result.yearsTouched.join(", ")
           : "none";
       showStatus(
-        `Holidays imported: ${result.updated || 0} updated (years: ${years}).`,
+        `Holidays updated: ${result.updated || 0} public holiday` +
+          (result.removed
+            ? `, ${result.removed} restored to working/weekend`
+            : "") +
+          ` (years: ${years}).`,
         "ok",
       );
     } catch (e) {

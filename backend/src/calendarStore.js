@@ -272,8 +272,9 @@ async function updateDay(year, date, patch) {
 /**
  * Apply remote holiday list to local year calendars.
  * Sets matching dates to public holiday (skips leave days).
+ * Optionally restores other public-holiday dates to working/weekend.
  * @param {Array<{ date?: string, title?: string, isOptional?: boolean }>} holidays
- * @param {{ includeOptional?: boolean }} [options]
+ * @param {{ includeOptional?: boolean, removeDates?: string[] }} [options]
  */
 async function syncHolidays(holidays, options = {}) {
   const includeOptional = Boolean(options.includeOptional);
@@ -300,19 +301,57 @@ async function syncHolidays(holidays, options = {}) {
     byYear.get(year).push({ date, title });
   }
 
+  /** @type {Map<number, string[]>} */
+  const removeByYear = new Map();
+  const removeDates = Array.isArray(options.removeDates)
+    ? options.removeDates
+    : [];
+  for (const raw of removeDates) {
+    const date = typeof raw === "string" ? raw.trim().slice(0, 10) : "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+    const year = parseInt(date.slice(0, 4), 10);
+    if (!removeByYear.has(year)) removeByYear.set(year, []);
+    removeByYear.get(year).push(date);
+  }
+
+  const yearsToTouch = new Set([...byYear.keys(), ...removeByYear.keys()]);
   const available = await listYears();
   const summary = {
     yearsTouched: [],
     updated: 0,
+    removed: 0,
     skippedLeave: 0,
     skippedMissing: 0,
     skippedNoYearFile: 0,
     titles: [],
+    removedTitles: [],
   };
 
-  for (const [year, items] of byYear) {
+  /**
+   * Restore a public holiday to weekend (Sat/Sun) or working day.
+   * @param {{ date: string, weekday?: string }} day
+   * @returns {"weekend"|"working"}
+   */
+  function restoreDayType(day) {
+    const weekday =
+      typeof day.weekday === "string" ? day.weekday.trim().toLowerCase() : "";
+    if (weekday === "saturday" || weekday === "sunday") {
+      return "weekend";
+    }
+    const dt = new Date(
+      Number(day.date.slice(0, 4)),
+      Number(day.date.slice(5, 7)) - 1,
+      Number(day.date.slice(8, 10)),
+    );
+    const dow = dt.getDay();
+    return dow === 0 || dow === 6 ? "weekend" : "working";
+  }
+
+  for (const year of yearsToTouch) {
     if (!available.includes(year)) {
-      summary.skippedNoYearFile += items.length;
+      const addCount = byYear.get(year)?.length || 0;
+      const remCount = removeByYear.get(year)?.length || 0;
+      summary.skippedNoYearFile += addCount + remCount;
       continue;
     }
 
@@ -321,7 +360,9 @@ async function syncHolidays(holidays, options = {}) {
       const indexByDate = new Map(doc.days.map((d, i) => [d.date, i]));
       let touched = false;
 
-      for (const { date, title } of items) {
+      const keepDates = new Set((byYear.get(year) || []).map((i) => i.date));
+
+      for (const { date, title } of byYear.get(year) || []) {
         const idx = indexByDate.get(date);
         if (idx === undefined) {
           summary.skippedMissing += 1;
@@ -339,6 +380,32 @@ async function syncHolidays(holidays, options = {}) {
         touched = true;
         summary.updated += 1;
         summary.titles.push({ date, title });
+      }
+
+      for (const date of removeByYear.get(year) || []) {
+        if (keepDates.has(date)) continue;
+        const idx = indexByDate.get(date);
+        if (idx === undefined) {
+          summary.skippedMissing += 1;
+          continue;
+        }
+        const day = doc.days[idx];
+        const currentType = inferDayType(day);
+        if (currentType !== "holiday") continue;
+        const previousTitle =
+          typeof day.holidayTitle === "string" && day.holidayTitle.trim()
+            ? day.holidayTitle.trim()
+            : "Public holiday";
+        const nextType = restoreDayType(day);
+        Object.assign(day, applyDayType(nextType));
+        day.timeSpend = DEFAULT_TIME_SPEND;
+        touched = true;
+        summary.removed += 1;
+        summary.removedTitles.push({
+          date,
+          title: previousTitle,
+          dayType: nextType,
+        });
       }
 
       if (touched) {

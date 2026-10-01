@@ -12,7 +12,7 @@
       "isHoliday": true,
       "holidayReason": "holiday",
       "dailyUpdate": "",
-      "holidayTitle": "New Year",
+      "holidayTitle": "New Year's Day",
       "timeSpend": 8
     },
     {
@@ -643,7 +643,8 @@
       "isHoliday": true,
       "holidayReason": "holiday",
       "dailyUpdate": "",
-      "timeSpend": 8
+      "timeSpend": 8,
+      "holidayTitle": "Holi"
     },
     {
       "date": "2026-03-05",
@@ -915,7 +916,8 @@
       "isHoliday": true,
       "holidayReason": "holiday",
       "dailyUpdate": "",
-      "timeSpend": 8
+      "timeSpend": 8,
+      "holidayTitle": "Mahavir Jayanti"
     },
     {
       "date": "2026-04-01",
@@ -2816,7 +2818,7 @@
       "isHoliday": true,
       "holidayReason": "holiday",
       "dailyUpdate": "",
-      "holidayTitle": "Gandhi Jayanti",
+      "holidayTitle": "Mahatma Gandhi's Birthday",
       "timeSpend": 8
     },
     {
@@ -3212,7 +3214,7 @@
       "isHoliday": true,
       "holidayReason": "holiday",
       "dailyUpdate": "",
-      "holidayTitle": "Deepawali",
+      "holidayTitle": "Govardhan Puja",
       "timeSpend": 8
     },
     {

@@ -23,6 +23,16 @@ export const calendarApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
+  previewHolidays: (params = {}) => {
+    const qs = new URLSearchParams();
+    if (params.year != null) qs.set("year", String(params.year));
+    if (params.country) qs.set("country", String(params.country));
+    if (params.region != null) qs.set("region", String(params.region));
+    const query = qs.toString();
+    return fetchJson(
+      `/api/calendar/holidays/preview${query ? `?${query}` : ""}`,
+    );
+  },
   syncHolidays: (body) =>
     fetchJson("/api/calendar/sync-holidays", {
       method: "POST",

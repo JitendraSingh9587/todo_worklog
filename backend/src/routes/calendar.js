@@ -49,30 +49,68 @@ router.get("/years", async (req, res, next) => {
 });
 
 /**
- * Fetch holidays from Worklog and mark matching calendar days as public holidays.
- * Body options:
- * - includeOptional: true — also sync optional holidays
- * - holidays: [...] — use this list instead of calling the remote API
+ * Preview remote public holidays (India calendar API) without writing the calendar.
+ * Query: year, country, region
+ */
+router.get("/holidays/preview", async (req, res, next) => {
+  try {
+    const yearRaw = req.query.year;
+    const year =
+      yearRaw !== undefined && yearRaw !== ""
+        ? parseInt(String(yearRaw), 10)
+        : new Date().getFullYear();
+    if (Number.isNaN(year) || year < 1900 || year > 2100) {
+      res.status(400).json({ error: "Invalid year" });
+      return;
+    }
+
+    const remote = await fetchRemoteHolidays({
+      year,
+      country: typeof req.query.country === "string" ? req.query.country : "",
+      region:
+        req.query.region !== undefined
+          ? String(req.query.region)
+          : undefined,
+    });
+
+    res.json({
+      ok: true,
+      holidays: remote.holidays,
+      meta: remote.meta,
+    });
+  } catch (err) {
+    const status = err.statusCode || 500;
+    if (status >= 400 && status < 600) {
+      res.status(status).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+});
+
+/**
+ * Import selected holidays into local year calendars.
+ * Body:
+ * - holidays: [{ date, title, isOptional? }] — required selected list
+ * - includeOptional: true — also apply optional/restricted items (default true when holidays provided)
  */
 router.post("/sync-holidays", async (req, res, next) => {
   try {
     const body = req.body && typeof req.body === "object" ? req.body : {};
-    const includeOptional = Boolean(body.includeOptional);
 
-    let holidays;
-    let meta = null;
-    if (Array.isArray(body.holidays)) {
-      holidays = body.holidays;
-      meta = { source: "request body", count: holidays.length };
-    } else {
-      const remote = await fetchRemoteHolidays({
-        cookie:
-          typeof body.sessionCookie === "string" ? body.sessionCookie : "",
-        token: typeof body.token === "string" ? body.token : "",
+    if (!Array.isArray(body.holidays) || body.holidays.length === 0) {
+      res.status(400).json({
+        error: "Provide a non-empty holidays array to import",
       });
-      holidays = remote.holidays;
-      meta = remote.meta;
+      return;
     }
+
+    const holidays = body.holidays;
+    const includeOptional =
+      body.includeOptional === undefined
+        ? true
+        : Boolean(body.includeOptional);
+    const meta = { source: "request body", count: holidays.length };
 
     const summary = await calendarStore.syncHolidays(holidays, {
       includeOptional,

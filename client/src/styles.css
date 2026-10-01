@@ -1118,3 +1118,202 @@ body {
   gap: 0.45rem;
   margin-top: 0.25rem;
 }
+
+.holiday-import-dialog {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0;
+  background: var(--surface-solid);
+  color: var(--text);
+  max-width: min(36rem, calc(100vw - 2rem));
+  width: 100%;
+  box-shadow: var(--shadow);
+}
+
+.holiday-import-dialog::backdrop {
+  background: rgba(6, 12, 20, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+.holiday-import-dialog__body {
+  padding: 1.1rem 1.2rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  max-height: min(85vh, 40rem);
+}
+
+.holiday-import-dialog__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+}
+
+.holiday-import-dialog__copy {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.holiday-import-dialog__copy--confirm {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.holiday-import-dialog__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.holiday-import-dialog__count {
+  margin-left: auto;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.holiday-import-dialog__hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.holiday-import-dialog__error {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--danger, #c0392b);
+}
+
+.holiday-import-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  max-height: min(50vh, 22rem);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.holiday-import-month {
+  border-bottom: 1px solid var(--border);
+}
+
+.holiday-import-month:last-child {
+  border-bottom: none;
+}
+
+.holiday-import-month__title {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface-solid) 92%, var(--bg));
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.holiday-import-month__count {
+  margin-left: auto;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.holiday-import-month__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.holiday-import-list__item {
+  border-bottom: 1px solid var(--border);
+}
+
+.holiday-import-month__list .holiday-import-list__item:last-child {
+  border-bottom: none;
+}
+
+.holiday-import-list__label {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.65rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.holiday-import-list__label:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.holiday-import-list__date {
+  flex: 0 0 4.2rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.holiday-import-list__weekday {
+  flex: 0 0 5.5rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.holiday-import-list__name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.holiday-import-list__badge {
+  flex: 0 0 auto;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.1rem 0.35rem;
+}
+
+.holiday-import-confirm-list {
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  max-height: min(40vh, 16rem);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.holiday-import-confirm-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.holiday-import-confirm-row:last-child {
+  border-bottom: none;
+}
+
+.holiday-import-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  margin-top: 0.15rem;
+}

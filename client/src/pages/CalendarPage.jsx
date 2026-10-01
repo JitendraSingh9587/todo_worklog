@@ -6,9 +6,7 @@ import Button from "../components/common/Button.jsx";
 import CalendarGrid from "../components/calendar/CalendarGrid.jsx";
 import DayEditor from "../components/editor/DayEditor.jsx";
 import TodoPanel from "../components/todos/TodoPanel.jsx";
-import WorklogAuthDialog, {
-  getSavedWorklogCookie,
-} from "../components/holidays/WorklogAuthDialog.jsx";
+import HolidayImportDialog from "../components/holidays/HolidayImportDialog.jsx";
 import { MONTH_NAMES } from "../constants/months.js";
 import { formatDailyUpdateBullets } from "../utils/dailyUpdate.js";
 import { todayDateString } from "../utils/date.js";
@@ -30,8 +28,7 @@ export default function CalendarPage() {
   const [status, setStatus] = useState("");
   const [statusKind, setStatusKind] = useState("");
   const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [authOpen, setAuthOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const showStatus = useCallback((message, kind = "") => {
     setStatus(message || "");
@@ -285,11 +282,8 @@ export default function CalendarPage() {
     );
   }
 
-  async function runHolidaySync(sessionCookie) {
-    setSyncing(true);
-    showStatus("Syncing holidays from Worklog…");
+  async function handleHolidaysImported(result) {
     try {
-      const result = await calendarApi.syncHolidays({ sessionCookie });
       await loadYearData(year);
       const doc = await calendarApi.getYear(year);
       const map = new Map((doc.days || []).map((d) => [d.date, d]));
@@ -302,26 +296,12 @@ export default function CalendarPage() {
           ? result.yearsTouched.join(", ")
           : "none";
       showStatus(
-        `Holidays synced: ${result.updated || 0} updated (years: ${years}). Fetched ${result.fetched || 0}.`,
+        `Holidays imported: ${result.updated || 0} updated (years: ${years}).`,
         "ok",
       );
     } catch (e) {
-      if (e.status === 401) {
-        setAuthOpen(true);
-      }
       showStatus(e.message, "err");
-    } finally {
-      setSyncing(false);
     }
-  }
-
-  function handleSyncHolidays() {
-    const cookie = getSavedWorklogCookie();
-    if (!cookie) {
-      setAuthOpen(true);
-      return;
-    }
-    runHolidaySync(cookie);
   }
 
   async function changeYear(nextYear) {
@@ -416,11 +396,10 @@ export default function CalendarPage() {
         <>
           <Button
             size="sm"
-            onClick={handleSyncHolidays}
-            disabled={syncing}
-            title="Fetch holidays from Worklog and update calendar"
+            onClick={() => setImportOpen(true)}
+            title="Fetch India public holidays and choose which to import"
           >
-            Sync holidays
+            Import holidays
           </Button>
           <Button
             variant="primary"
@@ -486,10 +465,11 @@ export default function CalendarPage() {
         />
       </main>
 
-      <WorklogAuthDialog
-        open={authOpen}
-        onClose={() => setAuthOpen(false)}
-        onSaved={(cookie) => runHolidaySync(cookie)}
+      <HolidayImportDialog
+        open={importOpen}
+        year={year}
+        onClose={() => setImportOpen(false)}
+        onImported={handleHolidaysImported}
         onStatus={showStatus}
       />
     </AppShell>

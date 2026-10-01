@@ -2987,7 +2987,19 @@
       "weekday": "Monday",
       "isHoliday": false,
       "holidayReason": null,
-      "dailyUpdate": ""
+      "dailyUpdate": "",
+      "holidayTitle": null,
+      "timeSpend": 8,
+      "projectEntries": [
+        {
+          "projectId": "f9c556ac-2940-4bf1-9315-05799a732109",
+          "hours": 8,
+          "taskDescription": "",
+          "entryId": "97dd1bc3-3d57-45ac-9f20-a147ef567ffb",
+          "clientId": "f9c556ac-2940-4bf1-9315-05799a732109"
+        }
+      ],
+      "clientId": "f9c556ac-2940-4bf1-9315-05799a732109"
     },
     {
       "date": "2026-10-20",

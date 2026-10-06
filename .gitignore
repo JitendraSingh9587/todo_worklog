@@ -4,5 +4,6 @@ client/node_modules/
 client/dist/
 .env
 backend/.env
+client/.env
 *.log
 .DS_Store

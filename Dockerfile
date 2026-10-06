@@ -22,7 +22,6 @@ ENV NODE_ENV=development
 COPY --from=backend-deps /app/backend/node_modules ./backend/node_modules
 COPY backend/package.json backend/package-lock.json backend/nodemon.json ./backend/
 COPY backend/src ./backend/src
-COPY backend/data ./backend/data
 COPY --from=client-build /app/client/dist ./client/dist
 WORKDIR /app/backend
 EXPOSE 3000
@@ -35,7 +34,6 @@ COPY backend/package.json backend/package-lock.json ./backend/
 WORKDIR /app/backend
 RUN npm ci --omit=dev
 COPY backend/src ./src
-COPY backend/data ./data
 COPY --from=client-build /app/client/dist /app/client/dist
 RUN chown -R node:node /app
 USER node

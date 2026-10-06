@@ -34,7 +34,7 @@ export default function ReportPage() {
       const { years } = await calendarApi.listYears();
       setAvailableYears(years || []);
       if (!years?.length) {
-        showStatus("No year-*.json files found in the data folder.", "err");
+        showStatus("No calendar years are available.", "err");
         return;
       }
       let nextYear = year;
@@ -73,14 +73,21 @@ export default function ReportPage() {
     return { rows: nextRows, counts: nextCounts };
   }, [dayByDate, year, month]);
 
-  async function changeYear(nextYear) {
-    setYear(nextYear);
-    if (nextYear === new Date().getFullYear()) {
-      setMonth(new Date().getMonth() + 1);
-    }
+  async function changeYear(nextYear, nextMonth) {
     showStatus("Loading…");
     try {
       await loadYearData(nextYear);
+      setYear(nextYear);
+      if (nextMonth !== undefined) {
+        setMonth(nextMonth);
+      } else if (nextYear === new Date().getFullYear()) {
+        setMonth(new Date().getMonth() + 1);
+      }
+      setAvailableYears((prev) =>
+        prev.includes(nextYear)
+          ? prev
+          : [...prev, nextYear].sort((a, b) => a - b),
+      );
       showStatus("");
     } catch (e) {
       showStatus(e.message, "err");
@@ -92,8 +99,7 @@ export default function ReportPage() {
     if (next < 1) {
       const idx = availableYears.indexOf(year);
       if (idx > 0) {
-        setMonth(12);
-        changeYear(availableYears[idx - 1]);
+        changeYear(availableYears[idx - 1], 12);
         return;
       }
       next = 1;
@@ -104,13 +110,8 @@ export default function ReportPage() {
   function handleNextMonth() {
     let next = month + 1;
     if (next > 12) {
-      const idx = availableYears.indexOf(year);
-      if (idx >= 0 && idx < availableYears.length - 1) {
-        setMonth(1);
-        changeYear(availableYears[idx + 1]);
-        return;
-      }
-      next = 12;
+      changeYear(year + 1, 1);
+      return;
     }
     setMonth(next);
   }
@@ -149,8 +150,8 @@ export default function ReportPage() {
       statusKind={statusKind}
       center={
         <>
-          <label className="field-inline">
-            <span>Year</span>
+          <label className="field-inline field-inline--compact">
+            <span className="sr-only">Year</span>
             <select
               value={year}
               onChange={(e) => changeYear(Number(e.target.value))}
@@ -159,20 +160,6 @@ export default function ReportPage() {
               {availableYears.map((y) => (
                 <option key={y} value={y}>
                   {y}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field-inline">
-            <span>Month</span>
-            <select
-              value={month}
-              onChange={(e) => setMonth(Number(e.target.value))}
-              aria-label="Month"
-            >
-              {MONTH_NAMES.map((name, idx) => (
-                <option key={name} value={idx + 1}>
-                  {name}
                 </option>
               ))}
             </select>

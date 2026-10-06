@@ -1,9 +1,9 @@
-# Persisted calendar JSON: ./backend/data (mounted into the API container).
-#
 # API + built React UI:  docker compose up --build
 # React HMR (optional):  docker compose --profile frontend up
 #
 # restart: unless-stopped — Docker brings containers back after host reboot.
+# MySQL is expected on the host (DB_* in backend/.env). Containers use
+# host.docker.internal to reach it. Calendar years 2026+ are generated in MySQL.
 services:
   api:
     restart: unless-stopped
@@ -16,10 +16,13 @@ services:
       - "3333:3334"
     env_file:
       - ./backend/.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      DB_HOST: host.docker.internal
     working_dir: /app/backend
     volumes:
       - ./backend/src:/app/backend/src
-      - ./backend/data:/app/backend/data
       - ./client/dist:/app/client/dist
       - ./backend/nodemon.json:/app/backend/nodemon.json:ro
       - ./backend/.env:/app/backend/.env:ro
@@ -54,9 +57,11 @@ services:
       - "3333:3334"
     env_file:
       - ./backend/.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      DB_HOST: host.docker.internal
     working_dir: /app/backend
-    volumes:
-      - ./backend/data:/app/backend/data
 
 volumes:
   client_node_modules:

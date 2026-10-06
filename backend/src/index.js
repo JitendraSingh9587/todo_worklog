@@ -1,5 +1,6 @@
 require("dotenv").config({
   path: require("path").resolve(__dirname, "../.env"),
+  override: true,
 });
 
 const path = require("path");
@@ -9,6 +10,8 @@ const { createLogger } = require("./logger");
 const calendarRouter = require("./routes/calendar");
 const todosRouter = require("./routes/todos");
 const catalogRouter = require("./routes/catalog");
+const { bootstrapDb } = require("./db/bootstrap");
+const { pingDb, closePool } = require("./db/pool");
 
 const logger = createLogger();
 const app = express();
@@ -23,11 +26,13 @@ const clientDistDir = process.env.CLIENT_DIST_DIR
 app.disable("x-powered-by");
 app.use(express.json({ limit: "512kb" }));
 
-app.get("/health", (req, res) => {
-  res.json({
-    status: "ok",
+app.get("/health", async (req, res) => {
+  const db = await pingDb();
+  res.status(db.ok ? 200 : 503).json({
+    status: db.ok ? "ok" : "degraded",
     timestamp: new Date().toISOString(),
     ui: "react",
+    database: db.ok,
   });
 });
 
@@ -69,8 +74,9 @@ app.use((err, req, res, _next) => {
 
 let server;
 
-function start() {
+async function start() {
   try {
+    await bootstrapDb();
     server = app.listen(port, host, () => {
       logger.info("Server listening", {
         host,
@@ -85,20 +91,31 @@ function start() {
       process.exit(1);
     });
   } catch (err) {
-    logger.error("Failed to start server", { message: err.message });
+    logger.error("Failed to start server", {
+      message: err.message,
+      code: err.code,
+    });
     process.exit(1);
   }
 }
 
 function shutdown(signal) {
   logger.info(`${signal} received, shutting down`);
+  const finish = async () => {
+    try {
+      await closePool();
+    } catch (err) {
+      logger.error("Error closing database pool", { message: err.message });
+    }
+    process.exit(0);
+  };
   if (server) {
     server.close(() => {
-      process.exit(0);
+      finish();
     });
     return;
   }
-  process.exit(0);
+  finish();
 }
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));

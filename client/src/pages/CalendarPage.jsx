@@ -115,7 +115,7 @@ export default function CalendarPage() {
       const { years } = await calendarApi.listYears();
       setAvailableYears(years || []);
       if (!years?.length) {
-        showStatus("No year-*.json files found in the data folder.", "err");
+        showStatus("No calendar years are available.", "err");
         return;
       }
       let nextYear = year;
@@ -310,14 +310,22 @@ export default function CalendarPage() {
     }
   }
 
-  async function changeYear(nextYear) {
-    setYear(nextYear);
+  async function changeYear(nextYear, nextMonthIndex) {
     showStatus("Loading…");
     try {
       await loadYearData(nextYear);
       const doc = await calendarApi.getYear(nextYear);
       const map = new Map((doc.days || []).map((d) => [d.date, d]));
       setDayByDate(map);
+      setYear(nextYear);
+      if (nextMonthIndex !== undefined) {
+        setMonthIndex(nextMonthIndex);
+      }
+      setAvailableYears((prev) =>
+        prev.includes(nextYear)
+          ? prev
+          : [...prev, nextYear].sort((a, b) => a - b),
+      );
       if (selectedDate && map.has(selectedDate)) {
         selectDate(selectedDate, map);
       } else {
@@ -331,34 +339,22 @@ export default function CalendarPage() {
   }
 
   function handlePrevMonth() {
-    let nextMonth = monthIndex - 1;
-    let nextYear = year;
-    if (nextMonth < 0) {
+    if (monthIndex === 0) {
       const idx = availableYears.indexOf(year);
       if (idx > 0) {
-        nextMonth = 11;
-        nextYear = availableYears[idx - 1];
-        setMonthIndex(nextMonth);
-        changeYear(nextYear);
-        return;
+        changeYear(availableYears[idx - 1], 11);
       }
-      nextMonth = 0;
+      return;
     }
-    setMonthIndex(nextMonth);
+    setMonthIndex(monthIndex - 1);
   }
 
   function handleNextMonth() {
-    let nextMonth = monthIndex + 1;
-    if (nextMonth > 11) {
-      const idx = availableYears.indexOf(year);
-      if (idx >= 0 && idx < availableYears.length - 1) {
-        setMonthIndex(0);
-        changeYear(availableYears[idx + 1]);
-        return;
-      }
-      nextMonth = 11;
+    if (monthIndex === 11) {
+      changeYear(year + 1, 0);
+      return;
     }
-    setMonthIndex(nextMonth);
+    setMonthIndex(monthIndex + 1);
   }
 
   const selectedDay = selectedDate ? dayByDate.get(selectedDate) : null;

@@ -1,5 +1,0 @@
-{
-  "schemaVersion": 1,
-  "about": "Todo sheet: only dates with todos are stored. Soft-delete with isDeleted true/false — todos are never removed from the sheet.",
-  "days": []
-}

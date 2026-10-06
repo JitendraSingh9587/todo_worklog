@@ -1,10 +1,10 @@
 const crypto = require("crypto");
-const fs = require("fs/promises");
-const path = require("path");
-
-const DATA_DIR = process.env.CALENDAR_DATA_DIR
-  ? path.resolve(process.env.CALENDAR_DATA_DIR)
-  : path.join(__dirname, "..", "data");
+const { getPool } = require("./db/pool");
+const {
+  ensureYearIfAllowed,
+  currentCalendarYear,
+  MIN_CALENDAR_YEAR,
+} = require("./db/calendarYears");
 
 const MAX_DAILY_UPDATE_LENGTH = 50_000;
 
@@ -16,6 +16,44 @@ const DEFAULT_TIME_SPEND = 8;
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const YEAR_ABOUT =
+  'dailyUpdate holds work log bullets (newline-separated). holidayReason: "weekend" (Sat/Sun), "holiday" (public holiday), "leave" (leave days), or null (working day).';
+
+function formatDate(value) {
+  if (value instanceof Date && Number.isFinite(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  return String(value).slice(0, 10);
+}
+
+function rowToDay(row) {
+  const day = {
+    date: formatDate(row.date),
+    month: Number(row.month),
+    monthName: row.month_name,
+    day: Number(row.day),
+    weekday: row.weekday,
+    isHoliday: Boolean(row.is_holiday),
+    holidayReason: row.holiday_reason,
+    dailyUpdate: row.daily_update || "",
+    timeSpend: Number(row.time_spend),
+  };
+  if (row.holiday_title) day.holidayTitle = row.holiday_title;
+  if (row.client_id) day.clientId = row.client_id;
+  return day;
+}
+
+function rowToEntry(row) {
+  const entry = {
+    entryId: row.entry_id,
+    projectId: row.project_id,
+    hours: Number(row.hours),
+    taskDescription: row.task_description || "",
+  };
+  if (row.client_id) entry.clientId = row.client_id;
+  return entry;
+}
 
 /**
  * @param {unknown} raw
@@ -52,7 +90,6 @@ function normalizeProjectEntries(raw) {
 }
 
 /**
- * Normalize API / UI time spend to integer hours 0–12 (matches workingHours).
  * @param {unknown} value
  * @returns {number}
  */
@@ -97,74 +134,126 @@ function inferDayType(day) {
   return "weekend";
 }
 
-let writeChain = Promise.resolve();
-
-/**
- * @param {() => Promise<void>} fn
- */
-function serializeWrite(fn) {
-  const next = writeChain.then(fn, fn);
-  writeChain = next.catch(() => {});
-  return next;
+async function loadEntriesByDate(pool, year) {
+  const [rows] = await pool.query(
+    `SELECT entry_id, date, project_id, client_id, hours, task_description
+     FROM project_entries
+     WHERE date >= ? AND date <= ?
+     ORDER BY date, entry_id`,
+    [`${year}-01-01`, `${year}-12-31`],
+  );
+  const byDate = new Map();
+  for (const row of rows) {
+    const date = formatDate(row.date);
+    if (!byDate.has(date)) byDate.set(date, []);
+    byDate.get(date).push(rowToEntry(row));
+  }
+  return byDate;
 }
 
-function yearFilePath(year) {
-  return path.join(DATA_DIR, `year-${year}.json`);
-}
-
-/**
- * @param {number} year
- */
 async function listYears() {
-  let names;
-  try {
-    names = await fs.readdir(DATA_DIR);
-  } catch (err) {
-    if (err.code === "ENOENT") return [];
-    throw err;
-  }
-  return names
-    .filter((f) => /^year-\d{4}\.json$/.test(f))
-    .map((f) => parseInt(f.slice(5, 9), 10))
-    .filter((y) => !Number.isNaN(y))
-    .sort((a, b) => a - b);
+  const pool = getPool();
+  await ensureYearIfAllowed(pool, currentCalendarYear());
+  const [rows] = await pool.query(
+    "SELECT DISTINCT year FROM calendar_days ORDER BY year ASC",
+  );
+  return rows.map((r) => Number(r.year));
 }
 
-/**
- * @param {number} year
- */
 async function getYearDocument(year) {
-  const filePath = yearFilePath(year);
-  let raw;
-  try {
-    raw = await fs.readFile(filePath, "utf8");
-  } catch (err) {
-    if (err.code === "ENOENT") {
-      const e = new Error(`No calendar data for year ${year}`);
-      e.statusCode = 404;
-      throw e;
-    }
-    throw err;
-  }
-  const doc = JSON.parse(raw);
-  if (doc.year !== year) {
-    const e = new Error("Calendar file year mismatch");
-    e.statusCode = 500;
+  const pool = getPool();
+  await ensureYearIfAllowed(pool, year);
+  const [dayRows] = await pool.query(
+    `SELECT date, year, month, month_name, day, weekday,
+            is_holiday, holiday_reason, holiday_title, daily_update,
+            time_spend, client_id
+     FROM calendar_days
+     WHERE year = ?
+     ORDER BY date ASC`,
+    [year],
+  );
+  if (!dayRows.length) {
+    const e = new Error(
+      year < MIN_CALENDAR_YEAR
+        ? `No calendar data for year ${year}`
+        : `Year ${year} is not available yet; open it from December of the previous year`,
+    );
+    e.statusCode = 404;
     throw e;
   }
-  return doc;
+  const entriesByDate = await loadEntriesByDate(pool, year);
+  const days = dayRows.map((row) => {
+    const day = rowToDay(row);
+    day.projectEntries = entriesByDate.get(day.date) || [];
+    return day;
+  });
+  return {
+    schemaVersion: 1,
+    year,
+    about: YEAR_ABOUT,
+    days,
+  };
 }
 
-/**
- * @param {number} year
- * @param {object} doc
- */
-async function writeYearDocument(year, doc) {
-  const filePath = yearFilePath(year);
-  const tmp = `${filePath}.${process.pid}.tmp`;
-  const content = `${JSON.stringify(doc, null, 2)}\n`;
-  await fs.writeFile(tmp, content, "utf8");
-  await fs.rename(tmp, filePath);
+async function fetchDay(conn, date) {
+  const [rows] = await conn.query(
+    `SELECT date, year, month, month_name, day, weekday,
+            is_holiday, holiday_reason, holiday_title, daily_update,
+            time_spend, client_id
+     FROM calendar_days
+     WHERE date = ?
+     LIMIT 1`,
+    [date],
+  );
+  return rows[0] ? rowToDay(rows[0]) : null;
+}
+
+async function fetchEntries(conn, date) {
+  const [rows] = await conn.query(
+    `SELECT entry_id, date, project_id, client_id, hours, task_description
+     FROM project_entries
+     WHERE date = ?
+     ORDER BY entry_id`,
+    [date],
+  );
+  return rows.map(rowToEntry);
+}
+
+async function persistDay(conn, date, day) {
+  await conn.query(
+    `UPDATE calendar_days
+     SET is_holiday = ?, holiday_reason = ?, holiday_title = ?,
+         daily_update = ?, time_spend = ?, client_id = ?
+     WHERE date = ?`,
+    [
+      day.isHoliday ? 1 : 0,
+      day.holidayReason,
+      day.holidayTitle || null,
+      day.dailyUpdate || "",
+      normalizeTimeSpend(day.timeSpend),
+      day.clientId || null,
+      date,
+    ],
+  );
+}
+
+async function replaceEntries(conn, date, entries) {
+  await conn.query("DELETE FROM project_entries WHERE date = ?", [date]);
+  if (!entries.length) return;
+  const values = entries.map((e) => [
+    e.entryId,
+    date,
+    e.projectId,
+    e.clientId || null,
+    e.hours,
+    e.taskDescription || "",
+  ]);
+  await conn.query(
+    `INSERT INTO project_entries (
+      entry_id, date, project_id, client_id, hours, task_description
+    ) VALUES ?`,
+    [values],
+  );
 }
 
 /**
@@ -184,15 +273,16 @@ async function updateDay(year, date, patch) {
     throw e;
   }
 
-  return serializeWrite(async () => {
-    const doc = await getYearDocument(year);
-    const idx = doc.days.findIndex((d) => d.date === date);
-    if (idx === -1) {
+  const pool = getPool();
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const day = await fetchDay(conn, date);
+    if (!day) {
       const e = new Error("Date not found in calendar");
       e.statusCode = 404;
       throw e;
     }
-    const day = doc.days[idx];
 
     if (patch.dailyUpdate !== undefined) {
       if (typeof patch.dailyUpdate !== "string") {
@@ -219,7 +309,6 @@ async function updateDay(year, date, patch) {
         throw e;
       }
       Object.assign(day, applyDayType(patch.dayType));
-      // Public holidays and leave default to a full day (8hr) unless timeSpend is also patched.
       if (
         (patch.dayType === "holiday" || patch.dayType === "leave") &&
         patch.timeSpend === undefined
@@ -238,8 +327,12 @@ async function updateDay(year, date, patch) {
       day.timeSpend = hours;
     }
 
+    let projectEntries;
     if (patch.projectEntries !== undefined) {
-      day.projectEntries = normalizeProjectEntries(patch.projectEntries);
+      projectEntries = normalizeProjectEntries(patch.projectEntries);
+      await replaceEntries(conn, date, projectEntries);
+    } else {
+      projectEntries = await fetchEntries(conn, date);
     }
 
     if (patch.clientId !== undefined) {
@@ -257,22 +350,38 @@ async function updateDay(year, date, patch) {
       }
     }
 
-    await writeYearDocument(year, doc);
+    await persistDay(conn, date, day);
+    await conn.commit();
     return {
       ...day,
       dayType: inferDayType(day),
       timeSpend: normalizeTimeSpend(day.timeSpend),
-      projectEntries: Array.isArray(day.projectEntries)
-        ? day.projectEntries
-        : [],
+      projectEntries,
     };
-  });
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
+function restoreDayType(day) {
+  const weekday =
+    typeof day.weekday === "string" ? day.weekday.trim().toLowerCase() : "";
+  if (weekday === "saturday" || weekday === "sunday") {
+    return "weekend";
+  }
+  const dt = new Date(
+    Number(day.date.slice(0, 4)),
+    Number(day.date.slice(5, 7)) - 1,
+    Number(day.date.slice(8, 10)),
+  );
+  const dow = dt.getDay();
+  return dow === 0 || dow === 6 ? "weekend" : "working";
 }
 
 /**
- * Apply remote holiday list to local year calendars.
- * Sets matching dates to public holiday (skips leave days).
- * Optionally restores other public-holiday dates to working/weekend.
  * @param {Array<{ date?: string, title?: string, isOptional?: boolean }>} holidays
  * @param {{ includeOptional?: boolean, removeDates?: string[] }} [options]
  */
@@ -284,7 +393,6 @@ async function syncHolidays(holidays, options = {}) {
     throw e;
   }
 
-  /** @type {Map<number, Array<{ date: string, title: string }>>} */
   const byYear = new Map();
   for (const item of holidays) {
     if (!item || typeof item !== "object") continue;
@@ -301,7 +409,6 @@ async function syncHolidays(holidays, options = {}) {
     byYear.get(year).push({ date, title });
   }
 
-  /** @type {Map<number, string[]>} */
   const removeByYear = new Map();
   const removeDates = Array.isArray(options.removeDates)
     ? options.removeDates
@@ -315,7 +422,6 @@ async function syncHolidays(holidays, options = {}) {
   }
 
   const yearsToTouch = new Set([...byYear.keys(), ...removeByYear.keys()]);
-  const available = await listYears();
   const summary = {
     yearsTouched: [],
     updated: 0,
@@ -327,48 +433,33 @@ async function syncHolidays(holidays, options = {}) {
     removedTitles: [],
   };
 
-  /**
-   * Restore a public holiday to weekend (Sat/Sun) or working day.
-   * @param {{ date: string, weekday?: string }} day
-   * @returns {"weekend"|"working"}
-   */
-  function restoreDayType(day) {
-    const weekday =
-      typeof day.weekday === "string" ? day.weekday.trim().toLowerCase() : "";
-    if (weekday === "saturday" || weekday === "sunday") {
-      return "weekend";
-    }
-    const dt = new Date(
-      Number(day.date.slice(0, 4)),
-      Number(day.date.slice(5, 7)) - 1,
-      Number(day.date.slice(8, 10)),
-    );
-    const dow = dt.getDay();
-    return dow === 0 || dow === 6 ? "weekend" : "working";
-  }
+  const pool = getPool();
 
   for (const year of yearsToTouch) {
-    if (!available.includes(year)) {
+    await ensureYearIfAllowed(pool, year);
+    const [countRows] = await pool.query(
+      "SELECT COUNT(*) AS n FROM calendar_days WHERE year = ?",
+      [year],
+    );
+    if (!(Number(countRows[0].n) > 0)) {
       const addCount = byYear.get(year)?.length || 0;
       const remCount = removeByYear.get(year)?.length || 0;
       summary.skippedNoYearFile += addCount + remCount;
       continue;
     }
 
-    await serializeWrite(async () => {
-      const doc = await getYearDocument(year);
-      const indexByDate = new Map(doc.days.map((d, i) => [d.date, i]));
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const keepDates = new Set((byYear.get(year) || []).map((i) => i.date));
       let touched = false;
 
-      const keepDates = new Set((byYear.get(year) || []).map((i) => i.date));
-
       for (const { date, title } of byYear.get(year) || []) {
-        const idx = indexByDate.get(date);
-        if (idx === undefined) {
+        const day = await fetchDay(conn, date);
+        if (!day) {
           summary.skippedMissing += 1;
           continue;
         }
-        const day = doc.days[idx];
         const currentType = inferDayType(day);
         if (currentType === "leave") {
           summary.skippedLeave += 1;
@@ -377,6 +468,7 @@ async function syncHolidays(holidays, options = {}) {
         Object.assign(day, applyDayType("holiday"));
         day.holidayTitle = title;
         day.timeSpend = DEFAULT_TIME_SPEND;
+        await persistDay(conn, date, day);
         touched = true;
         summary.updated += 1;
         summary.titles.push({ date, title });
@@ -384,12 +476,11 @@ async function syncHolidays(holidays, options = {}) {
 
       for (const date of removeByYear.get(year) || []) {
         if (keepDates.has(date)) continue;
-        const idx = indexByDate.get(date);
-        if (idx === undefined) {
+        const day = await fetchDay(conn, date);
+        if (!day) {
           summary.skippedMissing += 1;
           continue;
         }
-        const day = doc.days[idx];
         const currentType = inferDayType(day);
         if (currentType !== "holiday") continue;
         const previousTitle =
@@ -399,6 +490,7 @@ async function syncHolidays(holidays, options = {}) {
         const nextType = restoreDayType(day);
         Object.assign(day, applyDayType(nextType));
         day.timeSpend = DEFAULT_TIME_SPEND;
+        await persistDay(conn, date, day);
         touched = true;
         summary.removed += 1;
         summary.removedTitles.push({
@@ -408,18 +500,20 @@ async function syncHolidays(holidays, options = {}) {
         });
       }
 
-      if (touched) {
-        await writeYearDocument(year, doc);
-        summary.yearsTouched.push(year);
-      }
-    });
+      await conn.commit();
+      if (touched) summary.yearsTouched.push(year);
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
   }
 
   return summary;
 }
 
 module.exports = {
-  DATA_DIR,
   listYears,
   getYearDocument,
   updateDay,
